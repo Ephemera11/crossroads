@@ -1,0 +1,53 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"
+}
+
+model Session {
+  id           String    @id @default(cuid())
+  title        String?
+  decisionType String?
+  status       String    @default("active")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  messages     Message[]
+  experts      Expert[]
+  report       Report?
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  sessionId  String
+  session    Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role       String   // user | coach | expert | system
+  expertRole String?  // career_advisor | lifestyle_coach | financial_planner | ...
+  phase      String   // identification | interview | debate | report
+  content    String
+  createdAt  DateTime @default(now())
+}
+
+model Expert {
+  id        String   @id @default(cuid())
+  sessionId String
+  session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      String   // career_advisor | lifestyle_coach | financial_planner | ...
+  name      String   // "职业发展顾问" | "生活方式教练" | "财务规划师"
+  summary   String?
+  score     String?  // JSON string
+  createdAt DateTime @default(now())
+}
+
+model Report {
+  id           String   @id @default(cuid())
+  sessionId    String   @unique
+  session      Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  scoresJson   String?
+  coreConflict String?
+  strategy     String?
+  actionItems  String?
+  createdAt    DateTime @default(now())
+}
