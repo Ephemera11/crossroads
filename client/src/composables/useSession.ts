@@ -1,25 +1,55 @@
-import { ref, computed } from 'vue';
+import { reactive, computed } from 'vue';
 import type { Message, Session, Phase, Report, DecisionClassification } from '../types';
 
-const session = ref<Session | null>(null);
-const messages = ref<Message[]>([]);
-const currentPhase = ref<Phase>('identification');
-const isStreaming = ref(false);
-const error = ref<string | null>(null);
-const report = ref<Report | null>(null);
-const classification = ref<DecisionClassification | null>(null);
+// Polyfill for crypto.randomUUID in non-secure contexts
+function generateId(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  // Fallback UUID v4
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
+interface State {
+  session: Session | null;
+  messages: Message[];
+  currentPhase: Phase;
+  isStreaming: boolean;
+  error: string | null;
+  report: Report | null;
+  classification: DecisionClassification | null;
+}
+
+const state = reactive<State>({
+  session: null,
+  messages: [],
+  currentPhase: 'identification',
+  isStreaming: false,
+  error: null,
+  report: null,
+  classification: null,
+});
+
+// Debug: expose state globally
+if (typeof window !== 'undefined') {
+  (window as any).__debugState = state;
+}
 
 export function useSession() {
   const expertNames = computed(() => {
-    if (!classification.value) return [];
-    return classification.value.recommendedExperts.map(e => e.name);
+    if (!state.classification) return [];
+    return state.classification.recommendedExperts.map(e => e.name);
   });
 
-  const sessionId = computed(() => session.value?.id);
+  const sessionId = computed(() => state.session?.id);
 
   async function createSession(message: string) {
-    isStreaming.value = true;
-    error.value = null;
+    state.isStreaming = true;
+    state.error = null;
 
     try {
       const res = await fetch('/api/sessions', {
@@ -31,50 +61,48 @@ export function useSession() {
       if (!res.ok) throw new Error('Failed to create session');
 
       const data = await res.json();
-      session.value = { id: data.sessionId, status: 'active', messages: [], experts: [] };
-      classification.value = data.classification;
-      currentPhase.value = 'interview';
+      state.session = { id: data.sessionId, status: 'active', messages: [], experts: [] };
+      state.classification = data.classification;
+      state.currentPhase = 'interview';
 
-      // Add coach and first expert messages
-      for (const msg of data.messages) {
-        messages.value.push({
-          id: crypto.randomUUID(),
-          sessionId: data.sessionId,
-          role: msg.role,
-          expertRole: msg.expertRole,
-          phase: 'interview',
-          content: msg.content,
-          createdAt: new Date().toISOString(),
-        });
-      }
+      const newMessages = data.messages.map((msg: any) => ({
+        id: generateId(),
+        sessionId: data.sessionId,
+        role: msg.role,
+        expertRole: msg.expertRole,
+        phase: 'interview',
+        content: msg.content,
+        createdAt: new Date().toISOString(),
+      }));
+      state.messages = [...state.messages, ...newMessages];
+      console.log('[useSession] messages set:', state.messages.length, 'messages');
+      console.log('[useSession] state.messages is array:', Array.isArray(state.messages));
 
-      // Start SSE connection
       connectSSE(data.sessionId);
     } catch (e: any) {
-      error.value = e.message;
+      state.error = e.message;
     } finally {
-      isStreaming.value = false;
+      state.isStreaming = false;
     }
   }
 
   async function sendMessage(message: string) {
-    if (!session.value) return;
+    if (!state.session) return;
 
-    isStreaming.value = true;
-    error.value = null;
+    state.isStreaming = true;
+    state.error = null;
 
-    // Add user message immediately
-    messages.value.push({
-      id: crypto.randomUUID(),
-      sessionId: session.value.id,
+    state.messages = [...state.messages, {
+      id: generateId(),
+      sessionId: state.session.id,
       role: 'user',
-      phase: currentPhase.value,
+      phase: state.currentPhase,
       content: message,
       createdAt: new Date().toISOString(),
-    });
+    }];
 
     try {
-      const res = await fetch(`/api/sessions/${session.value.id}/messages`, {
+      const res = await fetch(`/api/sessions/${state.session.id}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message }),
@@ -84,27 +112,26 @@ export function useSession() {
 
       const data = await res.json();
 
-      for (const msg of data.messages) {
-        messages.value.push({
-          id: crypto.randomUUID(),
-          sessionId: session.value!.id,
-          role: msg.role,
-          expertRole: msg.expertRole,
-          phase: data.phase,
-          content: msg.content,
-          createdAt: new Date().toISOString(),
-        });
-      }
+      const newMsgs = data.messages.map((msg: any) => ({
+        id: generateId(),
+        sessionId: state.session!.id,
+        role: msg.role,
+        expertRole: msg.expertRole,
+        phase: data.phase,
+        content: msg.content,
+        createdAt: new Date().toISOString(),
+      }));
+      state.messages = [...state.messages, ...newMsgs];
 
-      currentPhase.value = data.phase;
+      state.currentPhase = data.phase;
 
       if (data.report) {
-        report.value = data.report;
+        state.report = data.report;
       }
     } catch (e: any) {
-      error.value = e.message;
+      state.error = e.message;
     } finally {
-      isStreaming.value = false;
+      state.isStreaming = false;
     }
   }
 
@@ -116,25 +143,24 @@ export function useSession() {
         const data = JSON.parse(event.data);
         if (data.type === 'messages' && data.messages) {
           for (const msg of data.messages) {
-            // Avoid duplicates
-            const exists = messages.value.find(
+            const exists = state.messages.find(
               m => m.content === msg.content && m.role === msg.role
             );
             if (!exists) {
-              messages.value.push({
-                id: crypto.randomUUID(),
+              state.messages = [...state.messages, {
+                id: generateId(),
                 sessionId: sid,
                 role: msg.role,
                 expertRole: msg.expertRole,
                 phase: data.phase,
                 content: msg.content,
                 createdAt: new Date().toISOString(),
-              });
+              }];
             }
           }
-          currentPhase.value = data.phase;
+          state.currentPhase = data.phase;
           if (data.report) {
-            report.value = data.report;
+            state.report = data.report;
           }
         }
       } catch {
@@ -148,23 +174,17 @@ export function useSession() {
   }
 
   function reset() {
-    session.value = null;
-    messages.value = [];
-    currentPhase.value = 'identification';
-    report.value = null;
-    classification.value = null;
-    error.value = null;
-    isStreaming.value = false;
+    state.session = null;
+    state.messages = [];
+    state.currentPhase = 'identification';
+    state.report = null;
+    state.classification = null;
+    state.error = null;
+    state.isStreaming = false;
   }
 
   return {
-    session,
-    messages,
-    currentPhase,
-    isStreaming,
-    error,
-    report,
-    classification,
+    state,
     expertNames,
     sessionId,
     createSession,

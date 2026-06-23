@@ -1,9 +1,9 @@
 <template>
-  <header class="session-header" v-if="classification">
+  <header class="session-header" v-if="state.classification">
     <div class="header-content">
-      <h1 class="title">{{ classification.title || '人生十字路口' }}</h1>
+      <h1 class="title">{{ state.classification.title || '人生十字路口' }}</h1>
       <div class="meta">
-        <span class="phase-badge" :class="currentPhase">
+        <span class="phase-badge" :class="state.currentPhase">
           {{ phaseLabel }}
         </span>
         <span class="expert-tags" v-if="expertNames.length">
@@ -26,7 +26,7 @@
 import { computed } from 'vue'
 import { useSession } from '../composables/useSession'
 
-const { classification, currentPhase, expertNames } = useSession()
+const { state, expertNames } = useSession()
 
 const expertColors = ['#4a9eff', '#4ade80', '#fbbf24', '#f472b6', '#a78bfa']
 
@@ -38,7 +38,7 @@ const phaseLabel = computed(() => {
     report: '生成报告',
     completed: '已完成',
   }
-  return labels[currentPhase.value] || currentPhase.value
+  return labels[state.currentPhase] || state.currentPhase
 })
 </script>
 

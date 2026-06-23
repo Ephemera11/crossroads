@@ -1,7 +1,7 @@
 <template>
   <div class="chat-panel" ref="panelRef">
-    <div class="messages" v-if="messages.length > 0">
-      <template v-for="msg in messages" :key="msg.id">
+    <div class="messages" v-if="hasMessages">
+      <template v-for="msg in state.messages" :key="msg.id">
         <UserMessage v-if="msg.role === 'user'" :message="msg" />
         <CoachMessage v-else-if="msg.role === 'coach'" :message="msg" />
         <ExpertCard v-else-if="msg.role === 'expert'" :message="msg" />
@@ -24,28 +24,33 @@
         </button>
       </div>
     </div>
-    <div v-if="isStreaming" class="streaming-indicator">
+    <div v-if="state.isStreaming" class="streaming-indicator">
       <span class="dot"></span> 思考中...
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, computed } from 'vue'
 import { useSession } from '../composables/useSession'
 import UserMessage from './UserMessage.vue'
 import CoachMessage from './CoachMessage.vue'
 import ExpertCard from './ExpertCard.vue'
 
-const { messages, isStreaming, createSession } = useSession()
+const { state, createSession } = useSession()
 const panelRef = ref<HTMLDivElement>()
+
+const hasMessages = computed(() => {
+  console.log('[ChatPanel] hasMessages computed:', state.messages.length)
+  return state.messages.length > 0
+})
 
 async function handleExample(text: string) {
   await createSession(text)
 }
 
 watch(
-  () => messages.value.length,
+  () => state.messages.length,
   async () => {
     await nextTick()
     if (panelRef.value) {

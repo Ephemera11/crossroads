@@ -5,13 +5,13 @@
         ref="inputRef"
         v-model="inputText"
         :placeholder="placeholder"
-        :disabled="isStreaming"
+        :disabled="state.isStreaming"
         @keydown.enter.exact.prevent="handleSend"
         rows="1"
       ></textarea>
       <button
         class="send-btn"
-        :disabled="!inputText.trim() || isStreaming"
+        :disabled="!inputText.trim() || state.isStreaming"
         @click="handleSend"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -26,12 +26,12 @@
 import { ref, computed } from 'vue'
 import { useSession } from '../composables/useSession'
 
-const { currentPhase, isStreaming, createSession, sendMessage } = useSession()
+const { state, createSession, sendMessage } = useSession()
 const inputText = ref('')
 const inputRef = ref<HTMLTextAreaElement>()
 
 const placeholder = computed(() => {
-  if (isStreaming.value) return '正在思考...'
+  if (state.isStreaming) return '正在思考...'
   const labels: Record<string, string> = {
     identification: '说说你的纠结吧...',
     interview: '输入你的回答...',
@@ -39,16 +39,16 @@ const placeholder = computed(() => {
     report: '报告已生成',
     completed: '决策已完成',
   }
-  return labels[currentPhase.value] || '输入...'
+  return labels[state.currentPhase] || '输入...'
 })
 
 async function handleSend() {
   const text = inputText.value.trim()
-  if (!text || isStreaming.value) return
+  if (!text || state.isStreaming) return
 
   inputText.value = ''
 
-  if (currentPhase.value === 'identification') {
+  if (state.currentPhase === 'identification') {
     await createSession(text)
   } else {
     await sendMessage(text)

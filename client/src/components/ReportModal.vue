@@ -1,6 +1,6 @@
 <template>
   <Teleport to="body">
-    <div class="modal-overlay" v-if="report" @click.self="$emit('close')">
+    <div class="modal-overlay" v-if="state.report" @click.self="$emit('close')">
       <div class="modal-container">
         <div class="modal-header">
           <h2>📊 决策报告</h2>
@@ -8,8 +8,8 @@
         </div>
         <div class="modal-body">
           <ScoreChart v-if="scores.length" :scores="scores" />
-          <ConflictSection :content="report.coreConflict" />
-          <StrategySection :content="report.strategy" />
+          <ConflictSection :content="state.report.coreConflict" />
+          <StrategySection :content="state.report.strategy" />
           <ActionList :items="actionItems" />
         </div>
       </div>
@@ -26,23 +26,23 @@ import ConflictSection from './ConflictSection.vue'
 import StrategySection from './StrategySection.vue'
 import ActionList from './ActionList.vue'
 
-const { report } = useSession()
+const { state } = useSession()
 
 defineEmits(['close'])
 
 const scores = computed<ScoreItem[]>(() => {
-  if (!report.value?.scoresJson) return []
+  if (!state.report?.scoresJson) return []
   try {
-    return JSON.parse(report.value.scoresJson)
+    return JSON.parse(state.report.scoresJson)
   } catch {
     return []
   }
 })
 
 const actionItems = computed<ActionItem[]>(() => {
-  if (!report.value?.actionItems) return []
+  if (!state.report?.actionItems) return []
   try {
-    return JSON.parse(report.value.actionItems)
+    return JSON.parse(state.report.actionItems)
   } catch {
     return []
   }

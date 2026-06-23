@@ -9,6 +9,7 @@ export class DeepSeekProvider implements ILLMProvider {
     this.apiKey = process.env.DEEPSEEK_API_KEY || '';
     this.baseUrl = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
     this.model = process.env.DEEPSEEK_MODEL || 'deepseek-chat';
+    console.log('[DeepSeek] Key loaded:', this.apiKey ? `sk-...${this.apiKey.slice(-8)}` : 'EMPTY');
   }
 
   async chat(messages: ChatMessage[], options?: ChatOptions): Promise<ChatResponse> {

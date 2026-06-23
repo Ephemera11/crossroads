@@ -1,8 +1,11 @@
 import { Router, Request, Response } from 'express';
 import prisma from '../store';
 import { createSession, processUserMessage, getSessionState } from '../services/session';
+import { DeepSeekProvider } from '../llm';
+import { askExpertQuestion } from '../agents/expert-interviewer';
 
 const router = Router();
+const llm = new DeepSeekProvider();
 
 // Create a new session
 router.post('/', async (req: Request, res: Response) => {
@@ -14,20 +17,34 @@ router.post('/', async (req: Request, res: Response) => {
 
     const { sessionId, classification, coachMessage } = await createSession(message);
 
-    // Get the first expert question
+    // Generate first expert's question
     const state = getSessionState(sessionId);
     let firstExpertMessage = null;
     if (state && state.expertRoles.length > 0) {
       const firstExpert = state.expertRoles[0];
-      const conv = state.expertConversations[firstExpert.role];
-      if (conv && conv.length > 0) {
-        firstExpertMessage = {
+      const question = await askExpertQuestion(llm, firstExpert.role, firstExpert.name, message, []);
+      
+      // Store the question in session state
+      state.expertConversations[firstExpert.role] = [{ question, answer: '' }];
+      state.expertRound = 1;
+
+      // Save to DB
+      await prisma.message.create({
+        data: {
+          sessionId,
           role: 'expert',
-          content: conv[0].question,
           expertRole: firstExpert.role,
-          expertName: firstExpert.name,
-        };
-      }
+          phase: 'interview',
+          content: question,
+        },
+      });
+
+      firstExpertMessage = {
+        role: 'expert',
+        content: question,
+        expertRole: firstExpert.role,
+        expertName: firstExpert.name,
+      };
     }
 
     res.json({

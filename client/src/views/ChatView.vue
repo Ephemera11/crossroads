@@ -15,11 +15,11 @@ import ChatPanel from '../components/ChatPanel.vue'
 import ChatInput from '../components/ChatInput.vue'
 import ReportModal from '../components/ReportModal.vue'
 
-const { report, currentPhase } = useSession()
+const { state } = useSession()
 const showReport = ref(false)
 
-watch(currentPhase, (phase) => {
-  if (phase === 'completed' && report.value) {
+watch(() => state.currentPhase, (phase) => {
+  if (phase === 'completed' && state.report) {
     showReport.value = true
   }
 })
